@@ -33,42 +33,46 @@ variables:
 #  * syntax-check
 #  * ASan, UBSan, Msan
 #  * distcheck
-Debian GNU/Linux build:
-  image: $CI_REGISTRY/$BUILD_IMAGES_PROJECT:$DEBIAN_BUILD
-  script:
-    - ./bootstrap
-    - ./configure $CONFIGURE_BASE_FLAGS -C
-    - make -j$(nproc) check
-    - make -j$(nproc) clean
-    - ./configure -C
-    - make -j$(nproc) check
-    - make -j$(nproc) distcheck
-  tags:
-    - shared
-  artifacts:
-    expire_in: 2 weeks
-    when: on_failure
-    paths:
-      - ./*.log
-      - src/testcurl/*.log
+# Debian GNU/Linux build:
+#   before_script:
+#     - apt-get update -qq && apt-get install -y -qq libcurl3
+#   image: $CI_REGISTRY/$BUILD_IMAGES_PROJECT:$DEBIAN_BUILD
+#   script:
+#     - ./bootstrap
+#     - ./configure $CONFIGURE_BASE_FLAGS -C
+#     - make -j$(nproc) check
+#     - make -j$(nproc) clean
+#     - ./configure -C
+#     - make -j$(nproc) check
+#     - make -j$(nproc) distcheck
+#   tags:
+#     - shared
+#   artifacts:
+#     expire_in: 2 weeks
+#     when: on_failure
+#     paths:
+#       - ./*.log
+#       - src/testcurl/*.log
 
-clang/Fedora:
-  image: $CI_REGISTRY/$BUILD_IMAGES_PROJECT:$FEDORA_BUILD
-  script:
-    - export CC=clang
-    - export CXX=clang++
-    - ./bootstrap
-    - ./configure $CONFIGURE_BASE_FLAGS
-    - make -j$(nproc) check
-  tags:
-    - shared
-  except:
-    - tags
-  artifacts:
-    expire_in: 2 weeks
-    when: on_failure
-    paths:
-      - src/testcurl/*.log
+# clang/Fedora:
+#   before_script:
+#     - dnf -y install texinfo
+#   image: $CI_REGISTRY/$BUILD_IMAGES_PROJECT:$FEDORA_BUILD
+#   script:
+#     - export CC=clang
+#     - export CXX=clang++
+#     - ./bootstrap
+#     - ./configure $CONFIGURE_BASE_FLAGS
+#     - make -j$(nproc) check
+#   tags:
+#     - shared
+#   except:
+#     - tags
+#   artifacts:
+#     expire_in: 2 weeks
+#     when: on_failure
+#     paths:
+#       - src/testcurl/*.log
 
 #Centos7 build:
 #  image: $CI_REGISTRY/$BUILD_IMAGES_PROJECT:$CENTOS7_BUILD
@@ -137,14 +141,20 @@ MinGW64:
   - make -j$(nproc)
   - make install
   - cd -
-  - wget https://www.gnupg.org/ftp/gcrypt/libgpg-error/libgpg-error-1.27.tar.bz2
-  - tar jxf libgpg-error-1.27.tar.bz2 && cd libgpg-error-1.27/
-  - ./configure --build=x86_64-pc-linux-gnu --host=$PREFIX --enable-shared --enable-static --prefix=/usr/$PREFIX
-  - make -j$(nproc)
-  - make install
-  - cd -
-  - wget https://www.gnupg.org/ftp/gcrypt/libgcrypt/libgcrypt-1.8.0.tar.bz2
-  - tar jxf libgcrypt-1.8.0.tar.bz2 && cd libgcrypt-1.8.0/
+  # - wget https://www.gnupg.org/ftp/gcrypt/libgpg-error/libgpg-error-1.27.tar.bz2
+  # - tar jxf libgpg-error-1.27.tar.bz2 && cd libgpg-error-1.27/
+  # - ./configure --build=x86_64-pc-linux-gnu --host=$PREFIX --enable-shared --enable-static --prefix=/usr/$PREFIX
+  # - make -j$(nproc)
+  # - make install
+  # - cd -
+  # - wget https://www.gnupg.org/ftp/gcrypt/libgcrypt/libgcrypt-1.8.0.tar.bz2
+  # - tar jxf libgcrypt-1.8.0.tar.bz2 && cd libgcrypt-1.8.0/
+  # - ./configure --build=x86_64-pc-linux-gnu --host=$PREFIX --enable-shared --enable-static --prefix=/usr/$PREFIX
+  # - make -j$(nproc)
+  # - make install
+  # - cd -
+  - wget https://curl.haxx.se/download/curl-7.54.1.tar.bz2
+  - tar jxf curl-7.54.1.tar.bz2 && cd curl-7.54.1/
   - ./configure --build=x86_64-pc-linux-gnu --host=$PREFIX --enable-shared --enable-static --prefix=/usr/$PREFIX
   - make -j$(nproc)
   - make install
@@ -157,7 +167,7 @@ MinGW64:
   - export RANLIB=$PREFIX-ranlib
   - export PATH="/usr/$PREFIX/bin:$PATH"
   - export CFLAGS="-O2 -Wall -Wno-format -lpthread"
-  - export WINEPATH="/usr/$PREFIX/bin;/usr/$PREFIX/lib;$PWD/libwget/.libs"
+  - export WINEPATH="/usr/$PREFIX/bin;/usr/$PREFIX/lib"
   - ./configure --build=x86_64-pc-linux-gnu --host=$PREFIX --enable-shared --enable-static
   - make clean
   - make -j$(nproc)
