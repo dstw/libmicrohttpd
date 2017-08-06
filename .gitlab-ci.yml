@@ -1,0 +1,175 @@
+variables:
+  BUILD_IMAGES_PROJECT: gnuwget/build-images
+  DEBIAN_BUILD: buildenv-debian-stretch
+  FEDORA_BUILD: buildenv-f26
+  CENTOS7_BUILD: buildenv-centos7
+  GET_SOURCES_ATTEMPTS: "3"
+  CONFIGURE_BASE_FLAGS: --enable-assert
+
+
+# We organize the CI runners as thus:
+#   1. Debian Stretch Build:
+#       * ASan and UBSan builds
+#       * make syntax-check
+#       * make distcheck
+#
+#   2. Fedora 25 Build
+#       * LLVM/Clang Build
+#       * Valgrind Tests
+#
+#   3. CentOS7 Build
+#       * Build with musl / newlib
+#       * Minimal Build (All features disabled)
+#
+#   This way we split most of the different build options across different
+#   platforms as well. Other builds we would like to have:
+#
+#   1. Windows
+#   2. OSX
+#   3. Documentation Generation and Gitlab pages
+#   4. Code coverage stats
+
+# In this build we combine
+#  * syntax-check
+#  * ASan, UBSan, Msan
+#  * distcheck
+Debian GNU/Linux build:
+  image: $CI_REGISTRY/$BUILD_IMAGES_PROJECT:$DEBIAN_BUILD
+  script:
+    - ./bootstrap
+    - ./configure $CONFIGURE_BASE_FLAGS -C
+    - make -j$(nproc) check
+    - make -j$(nproc) clean
+    - ./configure -C
+    - make -j$(nproc) check
+    - make -j$(nproc) distcheck
+  tags:
+    - shared
+  artifacts:
+    expire_in: 2 weeks
+    when: on_failure
+    paths:
+      - ./*.log
+      - src/testcurl/*.log
+
+clang/Fedora:
+  image: $CI_REGISTRY/$BUILD_IMAGES_PROJECT:$FEDORA_BUILD
+  script:
+    - export CC=clang
+    - export CXX=clang++
+    - ./bootstrap
+    - ./configure $CONFIGURE_BASE_FLAGS
+    - make -j$(nproc) check
+  tags:
+    - shared
+  except:
+    - tags
+  artifacts:
+    expire_in: 2 weeks
+    when: on_failure
+    paths:
+      - src/testcurl/*.log
+
+#Centos7 build:
+#  image: $CI_REGISTRY/$BUILD_IMAGES_PROJECT:$CENTOS7_BUILD
+#  script:
+#  - sed -i 's/AM_GNU_GETTEXT_VERSION(0.19.3)/AM_GNU_GETTEXT_VERSION(0.18.2)/g' configure.ac
+#  - ./bootstrap && ./configure --enable-gcc-warnings --disable-doc && make -j$(nproc) check
+#  tags:
+#  - shared
+#  artifacts:
+#    expire_in: 2 weeks
+#    when: on_failure
+#    paths:
+#      - tests/*.log
+#      - compat_reports/
+
+pages:
+  image: $CI_REGISTRY/$BUILD_IMAGES_PROJECT:$DEBIAN_BUILD
+  script:
+    - ./bootstrap
+    - CFLAGS="-g -O0" ./configure
+    - make -j$(nproc) check-coverage
+    - mkdir -p public
+    # Test suite coverage report
+    - rm -rf public/coverage
+    - mv lcov public/coverage
+    # Online Documentation
+    - rm -rf public/reference
+    - mv docs/html public/reference
+  tags:
+    - shared
+  artifacts:
+    when: on_success
+    paths:
+      - public
+  only:
+    - master
+
+MinGW64:
+  image: $CI_REGISTRY/$BUILD_IMAGES_PROJECT:$DEBIAN_BUILD
+  script:
+  - apt-get -y install gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 binutils-mingw-w64-x86-64 mingw-w64-x86-64-dev pkg-config-mingw-w64-x86-64 win-iconv-mingw-w64-dev wine wget
+  # install Libmicrohttpd with HTTPS support and all its dependencies
+  - export PREFIX=x86_64-w64-mingw32
+  - export CC=$PREFIX-gcc
+  - wget https://gmplib.org/download/gmp/gmp-6.1.2.tar.bz2
+  - tar jxf gmp-6.1.2.tar.bz2 && cd gmp-6.1.2/
+  - ./configure --build=x86_64-pc-linux-gnu --host=$PREFIX --enable-shared --disable-static --prefix=/usr/$PREFIX
+  - make -j$(nproc)
+  - make install
+  - cd -
+  - wget https://ftp.gnu.org/gnu/nettle/nettle-3.3.tar.gz
+  - tar zxf nettle-3.3.tar.gz && cd nettle-3.3/
+  - ./configure --build=x86_64-pc-linux-gnu --host=$PREFIX --enable-shared --enable-static --prefix=/usr/$PREFIX
+  - make -j$(nproc)
+  - make install
+  - cd -
+  - export CXX=$PREFIX-g++
+  - export CPP=$PREFIX-cpp
+  - export RANLIB=$PREFIX-ranlib
+  - export PATH="/usr/$PREFIX/bin:$PATH"
+  - export CFLAGS="-O2 -Wall -Wno-format"
+  - export WINEPATH="/usr/$PREFIX/bin;/usr/$PREFIX/lib"
+  - wget https://www.gnupg.org/ftp/gcrypt/gnutls/v3.5/gnutls-3.5.14.tar.xz
+  - tar Jxf gnutls-3.5.14.tar.xz && cd gnutls-3.5.14/
+  - ./configure --build=x86_64-pc-linux-gnu --host=$PREFIX --prefix=/usr/$PREFIX --with-included-libtasn1 --with-included-unistring --without-p11-kit --enable-shared --enable-static
+  - make -j$(nproc)
+  - make install
+  - cd -
+  - wget https://www.gnupg.org/ftp/gcrypt/libgpg-error/libgpg-error-1.27.tar.bz2
+  - tar jxf libgpg-error-1.27.tar.bz2 && cd libgpg-error-1.27/
+  - ./configure --build=x86_64-pc-linux-gnu --host=$PREFIX --enable-shared --enable-static --prefix=/usr/$PREFIX
+  - make -j$(nproc)
+  - make install
+  - cd -
+  - wget https://www.gnupg.org/ftp/gcrypt/libgcrypt/libgcrypt-1.8.0.tar.bz2
+  - tar jxf libgcrypt-1.8.0.tar.bz2 && cd libgcrypt-1.8.0/
+  - ./configure --build=x86_64-pc-linux-gnu --host=$PREFIX --enable-shared --enable-static --prefix=/usr/$PREFIX
+  - make -j$(nproc)
+  - make install
+  - cd -
+  - ./bootstrap
+  - export PREFIX=x86_64-w64-mingw32
+  - export CC=$PREFIX-gcc
+  - export CXX=$PREFIX-g++
+  - export CPP=$PREFIX-cpp
+  - export RANLIB=$PREFIX-ranlib
+  - export PATH="/usr/$PREFIX/bin:$PATH"
+  - export CFLAGS="-O2 -Wall -Wno-format -lpthread"
+  - export WINEPATH="/usr/$PREFIX/bin;/usr/$PREFIX/lib;$PWD/libwget/.libs"
+  - ./configure --build=x86_64-pc-linux-gnu --host=$PREFIX --enable-shared --enable-static
+  - make clean
+  - make -j$(nproc)
+  - make check -j$(nproc) LOG_COMPILER=wine
+  tags:
+  - shared
+  - docker
+  except:
+  - tags
+  artifacts:
+    expire_in: 2 weeks
+    when: on_failure
+    paths:
+      - ./*.log
+      - src/testcurl/*.log
